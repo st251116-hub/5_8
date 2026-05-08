@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Splatter Web Shooter: Hoko Mode</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+
+        :root {
+            --color-player1: #eaff00; /* ネオンイエロー */
+            --color-player1-ink: rgba(234, 255, 0, 0.8);
+            --color-enemy: #aa00ff; /* ネオンパープル */
+            --color-enemy-ink: rgba(170, 0, 255, 0.8);
+            --bg-color: #1a1a1a;
+            --ui-font: 'Fredoka One', cursive, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: white;
+            font-family: var(--ui-font);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 4px solid #333;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: crosshair;
+        }
+
+        #paintCanvas {
+            background-color: #222;
+            background-image: 
+                linear-gradient(#2d2d2d 1px, transparent 1px),
+                linear-gradient(90deg, #2d2d2d 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .header-ui {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px 20px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            align-items: flex-start;
+        }
+
+        .team-score {
+            display: flex;
+            flex-direction: column;
+            width: 200px;
+        }
+
+        .score-label {
+            font-size: 14px;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 0 #000;
+            margin-bottom: 5px;
+        }
+
+        /* プログレスバー（ホコの距離） */
+        .progress-bar-bg {
+            width: 100%;
+            height: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid #000;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.2s;
+        }
+
+        #prog-p1 { background-color: var(--color-player1); }
+        #prog-en { background-color: var(--color-enemy); }
+
+        .score-num {
+            font-size: 28px;
+            text-shadow: 2px 2px 0 #000;
+            margin-top: -5px;
+        }
+
+        #score-p1-text { color: var(--color-player1); text-align: left; }
+        #score-en-text { color: var(--color-enemy); text-align: right; }
+
+        .time-display {
+            font-size: 42px;
+            text-shadow: 3px 3px 0 #000;
+            color: #fff;
+            text-align: center;
+        }
+
+        .time-warning { color: #ff3333; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+        .footer-ui {
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+        }
+
+        .ink-tank-container {
+            width: 60px;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 3px solid #fff;
+            border-radius: 30px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            margin-bottom: 20px;
+        }
+
+        .ink-level {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--color-player1);
+            transition: height 0.1s linear, background-color 0.2s;
+        }
+        .ink-empty .ink-level { background-color: #ff3333; }
+
+        .center-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 54px;
+            text-align: center;
+            text-shadow: 4px 4px 0 #000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(0,0,0,0.8);
+            padding: 30px;
+            border-radius: 20px;
+            border: 4px solid #555;
+        }
+
+        .btn {
+            margin-top: 20px;
+            padding: 10px 30px;
+            font-size: 24px;
+            font-family: var(--ui-font);
+            background: var(--color-player1);
+            color: #000;
+            border: 4px solid #000;
+            border-radius: 10px;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: transform 0.1s;
+        }
+        .btn:hover { transform: scale(1.05); }
+
+        .controls-info {
+            margin-top: 15px;
+            text-align: center;
+            color: #aaa;
+            font-family: sans-serif;
+            font-size: 14px;
+        }
+        .controls-info span { color: #fff; font-weight: bold; }
+        .controls-info .hl { color: var(--color-player1); }
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <canvas id="paintCanvas" width="800" height="600"></canvas>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div id="ui-layer">
+            <div class="header-ui">
+                <div class="team-score">
+                    <span class="score-label" style="color: var(--color-player1)">YOU (YELLOW)</span>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" id="prog-p1"></div></div>
+                    <span class="score-num" id="score-p1-text">0</span>
+                </div>
+                <div class="time-display" id="time-left">3:00</div>
+                <div class="team-score" style="align-items: flex-end;">
+                    <span class="score-label" style="color: var(--color-enemy)">ENEMY (PURPLE)</span>
+                    <div class="progress-bar-bg" style="display:flex; justify-content:flex-end;"><div class="progress-bar-fill" id="prog-en"></div></div>
+                    <span class="score-num" id="score-en-text">0</span>
+                </div>
+            </div>
+
+            <div class="footer-ui">
+                <div class="ink-tank-container" id="ink-tank">
+                    <div class="ink-level" id="ink-level"></div>
+                </div>
+            </div>
+
+            <div class="center-msg" id="start-screen" style="display: flex;">
+                <div style="color: #fff; font-size: 40px;">4v4 ガチホコバトル</div>
+                <div style="font-size: 20px; margin-top: 10px; color: #aaa; font-family: sans-serif;">
+                    中央のホコバリアを割って、敵陣のゴールへ運べ！<br>
+                    <span style="color:var(--color-player1)">弾を4発当てると敵をキルできるぞ！</span>
+                </div>
+                <button class="btn" onclick="startGame()">BATTLE START</button>
+            </div>
+
+            <div class="center-msg" id="result-screen">
+                <div id="result-title">FINISH!</div>
+                <div style="font-size: 24px; margin-top: 20px;" id="result-desc"></div>
+                <button class="btn" onclick="resetGame()">PLAY AGAIN</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls-info">
+        [W][A][S][D]: 移動 | [マウス左長押し]: 射撃 | <span class="hl">[SPACE]: イカ潜伏（回復/加速）</span> | <span class="hl">ホコ持ち中左クリック: ホコショット</span>
+    </div>
+
+<script>
+    /** @type {HTMLCanvasElement} */
+    const gCanvas = document.getElementById('gameCanvas');
+    const gCtx = gCanvas.getContext('2d');
+    const pCanvas = document.getElementById('paintCanvas');
+    const pCtx = pCanvas.getContext('2d', { willReadFrequently: true });
+
+    const WIDTH = gCanvas.width;
+    const HEIGHT = gCanvas.height;
+
+    // ゲーム定数
+    const GAME_TIME = 180; 
+    const INK_MAX = 100;
+    const MAX_HP = 100; // キャラクターの最大体力
+    
+    // 陣地・ゴール設定 (プレイヤーは左から右へ、敵は右から左へ攻める)
+    const GOAL_P1 = { x: 730, y: 300 }; // プレイヤーチームが運ぶ先 (敵陣)
+    const GOAL_EN = { x: 70, y: 300 };  // 敵チームが運ぶ先 (自陣)
+    const MAX_DIST = Math.abs(GOAL_P1.x - WIDTH/2); // ゴールまでの最大距離
+
+    // 色
+    const C_P1 = '#eaff00';
+    const C_P1_INK = 'rgba(234, 255, 0, 0.9)';
+    const C_EN = '#aa00ff';
+    const C_EN_INK = 'rgba(170, 0, 255, 0.9)';
+
+    // 状態
+    let gameState = 'START';
+    let frameCount = 0;
+    let timeRemaining = GAME_TIME;
+    let lastTime = 0;
+    
+    // スコア (100でノックアウト)
+    let p1Score = 0;
+    let enScore = 0;
+
+    const keys = {};
+    const mouse = { x: WIDTH/2, y: HEIGHT/2, down: false };
+
+    // オブジェクト
+    let chars = []; 
+    let player = null;
+    let bullets = [];
+    let particles = [];
+    let floatingTexts = []; // ダメージやキルのポップアップテキスト用
+
+    // ホコ
+    let hoko = {
+        x: WIDTH/2, y: HEIGHT/2,
+        state: 'shield', 
+        hp: 0, 
+        carrier: null
+    };
+
+    // リスナー
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+    gCanvas.addEventListener('mousemove', e => {
+        const rect = gCanvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+    });
+    gCanvas.addEventListener('mousedown', (e) => { if(e.button === 0) mouse.down = true; });
+    gCanvas.addEventListener('mouseup', (e) => { if(e.button === 0) mouse.down = false; });
+
+    // --- 初期化 ---
+
+    function startGame() {
+        document.getElementById('start-screen').style.display = 'none';
+        resetGameParams();
+        gameState = 'PLAYING';
+        lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function resetGame() {
+        document.getElementById('result-screen').style.display = 'none';
+        resetGameParams();
+        gameState = 'PLAYING';
+        lastTime = performance.now();
+    }
+
+    function createCharacter(isPlayer, isAlly, id, name) {
+        return {
+            id: id,
+            name: name,
+            isPlayer: isPlayer,
+            team: isAlly ? 'player' : 'enemy',
+            x: isAlly ? 100 + Math.random()*50 : WIDTH - 100 - Math.random()*50,
+            y: HEIGHT/2 + (Math.random()-0.5)*200,
+            radius: 16, // 少し大きくして見やすく
+            speed: 3.5,
+            swimSpeed: 7.0,
+            ink: INK_MAX,
+            hp: MAX_HP, // 新要素：HP
+            isSwimming: false,
+            isDead: false,
+            respawnTimer: 0,
+            angle: isAlly ? 0 : Math.PI,
+            timer: 0, 
+            hokoCooldown: 0 
+        };
+    }
+
+    function resetGameParams() {
+        pCtx.clearRect(0, 0, WIDTH, HEIGHT);
+        chars = [];
+        bullets = [];
+        particles = [];
+        floatingTexts = [];
+        frameCount = 0;
+        timeRemaining = GAME_TIME;
+        p1Score = 0;
+        enScore = 0;
+
+        hoko = { x: WIDTH/2, y: HEIGHT/2, state: 'shield', hp: 0, carrier: null };
+
+        // プレイヤー + 味方3体 + 敵4体
+        player = createCharacter(true, true, 'P1', 'YOU');
+        chars.push(player);
+        for(let i=1; i<=3; i++) chars.push(createCharacter(false, true, 'A'+i, 'Ally'));
+        for(let i=1; i<=4; i++) chars.push(createCharacter(false, false, 'E'+i, 'Enemy'));
+
+        // 初期スポーン地を少し塗っておく
+        splatPaint(100, HEIGHT/2, 100, C_P1_INK);
+        splatPaint(WIDTH-100, HEIGHT/2, 100, C_EN_INK);
+        
+        updateUI();
+    }
+
+    // --- ユーティリティ ---
+
+    function checkFloorType(x, y) {
+        if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return 'none';
+        const imgData = pCtx.getImageData(x, y, 1, 1).data;
+        if (imgData[3] < 100) return 'none';
+        if (imgData[1] > 200 && imgData[0] > 200) return 'player'; // Yellow
+        if (imgData[2] > 200 && imgData[0] > 100) return 'enemy';  // Purple
+        return 'none';
+    }
+
+    function splatPaint(x, y, radius, color) {
+        pCtx.fillStyle = color;
+        pCtx.beginPath();
+        for (let i = 0; i < 5; i++) {
+            const rx = x + (Math.random() - 0.5) * radius;
+            const ry = y + (Math.random() - 0.5) * radius;
+            const rr = radius * (0.5 + Math.random() * 0.5);
+            pCtx.moveTo(rx, ry);
+            pCtx.arc(rx, ry, rr, 0, Math.PI * 2);
+        }
+        pCtx.fill();
+    }
+
+    function createExplosion(x, y, color, size) {
+        splatPaint(x, y, size, color);
+        for(let i=0; i<30; i++){
+            particles.push({
+                x: x, y: y,
+                vx: (Math.random() - 0.5) * 20,
+                vy: (Math.random() - 0.5) * 20,
+                color: color,
+                life: 20 + Math.random() * 30,
+                size: 5 + Math.random() * 8
+            });
+        }
+    }
+
+    function addFloatingText(x, y, text, color, isBig = false) {
+        floatingTexts.push({
+            x: x, y: y,
+            text: text,
+            color: color,
+            life: 40,
+            isBig: isBig,
+            vy: -1.5
+        });
+    }
+
+    // --- 更新処理 ---
+
+    function update() {
+        if (gameState !== 'PLAYING') return;
+        frameCount++;
+
+        updateHoko();
+        updateCharacters();
+        updateBullets();
+        updateParticles();
+        updateFloatingTexts();
+        
+        if (frameCount % 30 === 0 && hoko.carrier) {
+            updateScore();
+        }
+    }
+
+    function updateHoko() {
+        if (hoko.state === 'shield') {
+            if (hoko.hp >= 100) {
+                createExplosion(hoko.x, hoko.y, C_P1_INK, 150);
+                hoko.state = 'dropped';
+                damageInRadius(hoko.x, hoko.y, 120, 'enemy', 100);
+            } else if (hoko.hp <= -100) {
+                createExplosion(hoko.x, hoko.y, C_EN_INK, 150);
+                hoko.state = 'dropped';
+                damageInRadius(hoko.x, hoko.y, 120, 'player', 100);
+            } else {
+                if (hoko.hp > 0) hoko.hp = Math.max(0, hoko.hp - 0.1);
+                if (hoko.hp < 0) hoko.hp = Math.min(0, hoko.hp + 0.1);
+            }
+        } 
+        else if (hoko.state === 'dropped') {
+            for (let c of chars) {
+                if (!c.isDead && Math.hypot(c.x - hoko.x, c.y - hoko.y) < 30) {
+                    hoko.state = 'carried';
+                    hoko.carrier = c;
+                    break;
+                }
+            }
+        }
+        else if (hoko.state === 'carried') {
+            if (hoko.carrier.isDead) {
+                hoko.state = 'shield';
+                hoko.hp = 0;
+                hoko.carrier = null;
+            } else {
+                hoko.x = hoko.carrier.x;
+                hoko.y = hoko.carrier.y;
+            }
+        }
+    }
+
+    function damageInRadius(x, y, radius, targetTeam, damage) {
+        for (let c of chars) {
+            if (!c.isDead && c.team === targetTeam && Math.hypot(c.x - x, c.y - y) < radius) {
+                applyDamage(c, damage);
+            }
+        }
+    }
+
+    function applyDamage(c, damage) {
+        if (c.isDead) return;
+        c.hp -= damage;
+        addFloatingText(c.x, c.y - 20, `-${damage}`, '#fff');
+
+        if (c.hp <= 0) {
+            killCharacter(c);
+        }
+    }
+
+    function killCharacter(c) {
+        c.isDead = true;
+        c.respawnTimer = 180; // 3秒リスポーン
+        createExplosion(c.x, c.y, c.team === 'player' ? C_EN_INK : C_P1_INK, 80);
+        addFloatingText(c.x, c.y, "SPLAT!", c.team === 'player' ? C_EN : C_P1, true);
+
+        // もしホコを持っていたら落とす
+        if (hoko.carrier === c) {
+            hoko.state = 'shield';
+            hoko.hp = 0;
+            hoko.carrier = null;
+        }
+    }
+
+    function updateCharacters() {
+        for (let i = 0; i < chars.length; i++) {
+            let c = chars[i];
+            
+            if (c.isDead) {
+                c.respawnTimer--;
+                if (c.respawnTimer <= 0) {
+                    c.isDead = false;
+                    c.x = c.team === 'player' ? 100 : WIDTH - 100;
+                    c.y = HEIGHT/2 + (Math.random()-0.5)*100;
+                    c.ink = INK_MAX;
+                    c.hp = MAX_HP; // リスポーン時にHP全快
+                }
+                continue;
+            }
+
+            const floorType = checkFloorType(c.x, c.y);
+            const isCarrier = (hoko.carrier === c);
+            if (c.hokoCooldown > 0) c.hokoCooldown--;
+
+            // インク回復 & HP自動回復
+            if (c.isSwimming) {
+                c.ink = Math.min(INK_MAX, c.ink + 2.0);
+                c.hp = Math.min(MAX_HP, c.hp + 0.5); // 潜伏中はHPも回復
+            } else {
+                c.ink = Math.min(INK_MAX, c.ink + 0.2);
+            }
+
+            // --- 操作 / AI移動決定 ---
+            let dx = 0, dy = 0;
+            let doShoot = false;
+            let aimAngle = c.angle;
+
+            if (c.isPlayer) {
+                c.isSwimming = keys['Space'] && floorType === c.team;
+                if (keys['KeyW']) dy -= 1;
+                if (keys['KeyS']) dy += 1;
+                if (keys['KeyA']) dx -= 1;
+                if (keys['KeyD']) dx += 1;
+                
+                doShoot = mouse.down;
+                if (doShoot && !c.isSwimming) {
+                    aimAngle = Math.atan2(mouse.y - c.y, mouse.x - c.x);
+                } else if (dx !== 0 || dy !== 0) {
+                    aimAngle = Math.atan2(dy, dx);
+                }
+            } else {
+                // AI Logic
+                c.isSwimming = (floorType === c.team && c.hp < MAX_HP); // 傷ついているなら優先して潜る
+                if (hoko.state === 'dropped' && Math.hypot(c.x - hoko.x, c.y - hoko.y) < 100) {
+                    c.isSwimming = false; // ホコが近ければ潜らない
+                }
+
+                c.timer--;
+                let targetX = c.x, targetY = c.y;
+
+                if (hoko.state === 'shield') {
+                    targetX = hoko.x + (Math.random()-0.5)*50;
+                    targetY = hoko.y + (Math.random()-0.5)*50;
+                    if (Math.hypot(c.x - hoko.x, c.y - hoko.y) < 150) {
+                        doShoot = true;
+                        aimAngle = Math.atan2(hoko.y - c.y, hoko.x - c.x);
+                        dx = 0; dy = 0; 
+                    } else {
+                        dx = targetX - c.x; dy = targetY - c.y;
+                    }
+                } 
+                else if (hoko.state === 'dropped') {
+                    dx = hoko.x - c.x; dy = hoko.y - c.y;
+                    if (frameCount % 20 === 0 && floorType !== c.team) {
+                        doShoot = true; aimAngle = Math.atan2(dy, dx);
+                    }
+                }
+                else if (hoko.state === 'carried') {
+                    if (isCarrier) {
+                        let goal = c.team === 'player' ? GOAL_P1 : GOAL_EN;
+                        dx = goal.x - c.x; dy = goal.y - c.y;
+                        if (c.hokoCooldown <= 0 && Math.random() < 0.05) {
+                            doShoot = true; aimAngle = Math.atan2(dy, dx);
+                        }
+                    } else if (hoko.carrier.team === c.team) {
+                        let goal = c.team === 'player' ? GOAL_P1 : GOAL_EN;
+                        targetX = hoko.x + (goal.x - hoko.x)*0.3;
+                        targetY = hoko.y + (goal.y - hoko.y)*0.3;
+                        dx = targetX - c.x; dy = targetY - c.y;
+                        
+                        for(let en of chars) {
+                            if(!en.isDead && en.team !== c.team && Math.hypot(c.x-en.x, c.y-en.y) < 200) {
+                                doShoot = true; aimAngle = Math.atan2(en.y - c.y, en.x - c.x); break;
+                            }
+                        }
+                        if(!doShoot && frameCount % 30 === 0) {
+                            doShoot = true; aimAngle = Math.atan2(goal.y-c.y, goal.x-c.x); 
+                        }
+                    } else {
+                        dx = hoko.x - c.x; dy = hoko.y - c.y;
+                        if (Math.hypot(dx, dy) < 250) {
+                            doShoot = true; aimAngle = Math.atan2(dy, dx);
+                        }
+                    }
+                }
+
+                for (let other of chars) {
+                    if (other !== c && !other.isDead) {
+                        let dist = Math.hypot(c.x - other.x, c.y - other.y);
+                        if (dist < 30) { dx += (c.x - other.x); dy += (c.y - other.y); }
+                    }
+                }
+
+                if (!doShoot && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
+                    aimAngle = Math.atan2(dy, dx);
+                }
+            }
+            
+            c.angle = aimAngle;
+
+            // --- 移動適用 ---
+            let currentSpeed = c.isSwimming ? c.swimSpeed : c.speed;
+            if (isCarrier) currentSpeed *= 0.6; 
+            else if (!c.isSwimming && floorType !== c.team && floorType !== 'none') {
+                currentSpeed *= 0.3; 
+                applyDamage(c, 0.2); // 敵インク踏みダメージ
+            }
+
+            if (dx !== 0 || dy !== 0) {
+                const len = Math.hypot(dx, dy);
+                c.x += (dx / len) * currentSpeed;
+                c.y += (dy / len) * currentSpeed;
+            }
+
+            c.x = Math.max(c.radius, Math.min(WIDTH - c.radius, c.x));
+            c.y = Math.max(c.radius, Math.min(HEIGHT - c.radius, c.y));
+
+            // --- 射撃 ---
+            if (doShoot && !c.isSwimming) {
+                if (isCarrier) {
+                    if (c.hokoCooldown <= 0) {
+                        bullets.push({
+                            type: 'hoko', x: c.x, y: c.y,
+                            vx: Math.cos(c.angle) * 8, vy: Math.sin(c.angle) * 8,
+                            owner: c.team, radius: 14, life: 40, damage: 100 // ホコは即死級ダメージ
+                        });
+                        c.hokoCooldown = 60; 
+                    }
+                } else {
+                    if (c.ink > 0 && frameCount % 6 === 0) { // 少し連射速度を落として一発を重く
+                        const spread = (Math.random() - 0.5) * 0.2;
+                        bullets.push({
+                            type: 'normal', x: c.x + Math.cos(c.angle)*c.radius, y: c.y + Math.sin(c.angle)*c.radius,
+                            vx: Math.cos(c.angle + spread) * 14, vy: Math.sin(c.angle + spread) * 14,
+                            owner: c.team, radius: 6, life: 20, damage: 25 // 4発で100ダメージ
+                        });
+                        c.ink -= 3;
+                    }
+                }
+            }
+        }
+    }
+
+    function updateBullets() {
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            let b = bullets[i];
+            b.x += b.vx; b.y += b.vy; b.life--;
+            
+            let color = b.owner === 'player' ? C_P1_INK : C_EN_INK;
+            let hit = false;
+
+            // ホコバリアへの当たり判定
+            if (hoko.state === 'shield') {
+                if (Math.hypot(b.x - hoko.x, b.y - hoko.y) < 40 + b.radius) {
+                    hit = true;
+                    let dmg = b.type === 'hoko' ? 30 : 10;
+                    if (b.owner === 'player') hoko.hp = Math.min(100, hoko.hp + dmg);
+                    else hoko.hp = Math.max(-100, hoko.hp - dmg);
+                }
+            }
+
+            // キャラへの当たり判定
+            if (!hit) {
+                for (let c of chars) {
+                    // 潜伏中も当たり判定はあるが少し避けやすい
+                    let hitRadius = c.isSwimming ? c.radius * 0.5 : c.radius;
+                    if (!c.isDead && c.team !== b.owner) {
+                        if (Math.hypot(b.x - c.x, b.y - c.y) < hitRadius + b.radius) {
+                            hit = true;
+                            splatPaint(c.x, c.y, 20, color); // 足元を塗る
+                            applyDamage(c, b.damage); // ダメージ適用
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 軌道のペイント
+            if (b.type === 'normal' && b.life % 2 === 0) {
+                splatPaint(b.x, b.y, b.radius * 1.5, color);
+            } else if (b.type === 'hoko') {
+                splatPaint(b.x, b.y, b.radius * 2.5, color);
+            }
+
+            if (hit || b.life <= 0 || b.x < 0 || b.x > WIDTH || b.y < 0 || b.y > HEIGHT) {
+                if (b.type === 'hoko') {
+                    createExplosion(b.x, b.y, color, 80);
+                    damageInRadius(b.x, b.y, 80, b.owner === 'player' ? 'enemy' : 'player', 100);
+                } else if (!hit) {
+                    splatPaint(b.x, b.y, b.radius * 3.5, color);
+                }
+                bullets.splice(i, 1);
+            }
+        }
+    }
+
+    function updateParticles() {
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx; p.y += p.vy;
+            p.life--;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+    }
+
+    function updateFloatingTexts() {
+        for (let i = floatingTexts.length - 1; i >= 0; i--) {
+            let t = floatingTexts[i];
+            t.y += t.vy;
+            t.life--;
+            if (t.life <= 0) floatingTexts.splice(i, 1);
+        }
+    }
+
+    function updateScore() {
+        if (!hoko.carrier) return;
+
+        if (hoko.carrier.team === 'player') {
+            let dist = Math.hypot(hoko.x - GOAL_P1.x, hoko.y - GOAL_P1.y);
+            let prog = Math.floor(100 - (dist / MAX_DIST * 100));
+            if (prog > p1Score) p1Score = Math.min(100, prog);
+            if (p1Score >= 100) finishGame('KNOCKOUT_WIN');
+        } else {
+            let dist = Math.hypot(hoko.x - GOAL_EN.x, hoko.y - GOAL_EN.y);
+            let prog = Math.floor(100 - (dist / MAX_DIST * 100));
+            if (prog > enScore) enScore = Math.min(100, prog);
+            if (enScore >= 100) finishGame('KNOCKOUT_LOSE');
+        }
+    }
+
+    // --- 描画処理 ---
+
+    function draw() {
+        gCtx.clearRect(0, 0, WIDTH, HEIGHT);
+
+        drawGoal(GOAL_P1.x, GOAL_P1.y, C_P1);
+        drawGoal(GOAL_EN.x, GOAL_EN.y, C_EN);
+
+        particles.forEach(p => {
+            gCtx.fillStyle = p.color;
+            gCtx.globalAlpha = p.life / 40;
+            gCtx.beginPath(); gCtx.arc(p.x, p.y, p.size, 0, Math.PI*2); gCtx.fill();
+        });
+        gCtx.globalAlpha = 1.0;
+
+        bullets.forEach(b => {
+            gCtx.fillStyle = b.owner === 'player' ? C_P1 : C_EN;
+            gCtx.beginPath(); gCtx.arc(b.x, b.y, b.radius, 0, Math.PI*2); gCtx.fill();
+            if(b.type === 'hoko') {
+                gCtx.strokeStyle = '#fff'; gCtx.lineWidth=2; gCtx.stroke();
+            }
+        });
+
+        // キャラクターの描画
+        chars.forEach(c => {
+            if (c.isDead) return;
+            let color = c.team === 'player' ? C_P1 : C_EN;
+            
+            if (c.isSwimming) {
+                // イカ潜伏（波紋）
+                gCtx.fillStyle = color;
+                gCtx.globalAlpha = 0.6;
+                gCtx.beginPath(); gCtx.ellipse(c.x, c.y, c.radius*1.2, c.radius * 0.6, c.angle, 0, Math.PI*2); gCtx.fill();
+                gCtx.globalAlpha = 1.0;
+                
+                // 潜伏中もHPと名前は薄く表示
+                drawCharUI(c, 0.5);
+            } else {
+                if (hoko.carrier === c) {
+                    gCtx.shadowBlur = 20; gCtx.shadowColor = '#ffaa00';
+                }
+                
+                // 新しい人型風のキャラクター描画
+                drawHumanCharacter(c.x, c.y, c.radius, c.angle, color, c.isPlayer);
+                gCtx.shadowBlur = 0;
+
+                // プレイヤーのエイムライン
+                if (c.isPlayer) {
+                    gCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; gCtx.setLineDash([5, 5]); gCtx.lineWidth = 2;
+                    gCtx.beginPath(); gCtx.moveTo(c.x, c.y);
+                    gCtx.lineTo(c.x + Math.cos(c.angle)*150, c.y + Math.sin(c.angle)*150);
+                    gCtx.stroke(); gCtx.setLineDash([]);
+                }
+
+                // HPバーと名前の表示（視認性アップ）
+                drawCharUI(c, 1.0);
+            }
+        });
+
+        if (hoko.state === 'shield') {
+            let shieldRadius = 40 + (Math.abs(hoko.hp) / 100) * 10;
+            let domColor = hoko.hp > 0 ? C_P1 : (hoko.hp < 0 ? C_EN : '#fff');
+            
+            gCtx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            gCtx.strokeStyle = domColor;
+            gCtx.lineWidth = 3 + Math.abs(hoko.hp)/20;
+            gCtx.beginPath(); gCtx.arc(hoko.x, hoko.y, shieldRadius, 0, Math.PI*2); 
+            gCtx.fill(); gCtx.stroke();
+            drawHokoItem(hoko.x, hoko.y);
+        } else if (hoko.state === 'dropped') {
+            gCtx.shadowBlur = (frameCount % 20 < 10) ? 15 : 0;
+            gCtx.shadowColor = '#ffaa00';
+            drawHokoItem(hoko.x, hoko.y);
+            gCtx.shadowBlur = 0;
+        }
+
+        // 浮遊テキスト（ダメージ等）
+        floatingTexts.forEach(t => {
+            gCtx.fillStyle = t.color;
+            gCtx.font = t.isBig ? 'bold 24px "Fredoka One", sans-serif' : 'bold 16px sans-serif';
+            gCtx.textAlign = 'center';
+            gCtx.strokeStyle = '#000';
+            gCtx.lineWidth = 3;
+            gCtx.globalAlpha = t.life / 40;
+            gCtx.strokeText(t.text, t.x, t.y);
+            gCtx.fillText(t.text, t.x, t.y);
+            gCtx.globalAlpha = 1.0;
+        });
+    }
+
+    // 視認性を高めたキャラクター描画（丸い頭＋体＋太いフチ）
+    function drawHumanCharacter(x, y, r, angle, color, isPlayer) {
+        gCtx.save();
+        gCtx.translate(x, y); gCtx.rotate(angle);
+        
+        // アウトライン（フチ取り）を太くして見やすく
+        gCtx.lineWidth = 3;
+        gCtx.strokeStyle = '#000';
+
+        // 体（後ろ側）
+        gCtx.fillStyle = '#333'; // 服の色
+        gCtx.beginPath();
+        gCtx.rect(-r*0.5, -r*0.8, r, r*1.6);
+        gCtx.fill(); gCtx.stroke();
+
+        // 武器（前方に突き出た四角）
+        gCtx.fillStyle = color;
+        gCtx.beginPath();
+        gCtx.rect(0, -r*0.3, r*1.5, r*0.6);
+        gCtx.fill(); gCtx.stroke();
+
+        // 頭（丸）
+        gCtx.fillStyle = color;
+        gCtx.beginPath(); gCtx.arc(0, 0, r, 0, Math.PI*2);
+        gCtx.fill(); gCtx.stroke();
+        
+        // 目（進行方向を向く）
+        gCtx.fillStyle = 'white'; 
+        gCtx.beginPath(); 
+        gCtx.arc(r*0.4, -r*0.3, r*0.25, 0, Math.PI*2); 
+        gCtx.arc(r*0.4, r*0.3, r*0.25, 0, Math.PI*2); 
+        gCtx.fill();
+
+        gCtx.fillStyle = 'black';
+        gCtx.beginPath(); 
+        gCtx.arc(r*0.5, -r*0.3, r*0.1, 0, Math.PI*2); 
+        gCtx.arc(r*0.5, r*0.3, r*0.1, 0, Math.PI*2); 
+        gCtx.fill();
+
+        // プレイヤーの場合は特別な装飾（帽子っぽいもの）
+        if (isPlayer) {
+            gCtx.fillStyle = '#fff';
+            gCtx.beginPath();
+            gCtx.arc(0, 0, r*0.6, Math.PI*0.5, Math.PI*1.5);
+            gCtx.fill(); gCtx.stroke();
+        }
+
+        gCtx.restore();
+    }
+
+    // キャラクターの頭上にHPバーと名前を描画
+    function drawCharUI(c, alpha) {
+        gCtx.save();
+        gCtx.globalAlpha = alpha;
+        const barWidth = 30;
+        const barHeight = 6;
+        const uy = c.y - c.radius - 15;
+
+        // 名前
+        gCtx.fillStyle = c.team === 'player' ? C_P1 : '#fff';
+        if (c.isPlayer) gCtx.fillStyle = '#fff';
+        gCtx.font = '10px sans-serif';
+        gCtx.textAlign = 'center';
+        gCtx.strokeStyle = '#000';
+        gCtx.lineWidth = 2;
+        gCtx.strokeText(c.name, c.x, uy - 5);
+        gCtx.fillText(c.name, c.x, uy - 5);
+
+        // HPバー背景
+        gCtx.fillStyle = '#000';
+        gCtx.fillRect(c.x - barWidth/2, uy, barWidth, barHeight);
+        
+        // HPバー中身（色変化：緑→黄→赤）
+        let hpRatio = Math.max(0, c.hp / MAX_HP);
+        if (hpRatio > 0.5) gCtx.fillStyle = '#00ff00';
+        else if (hpRatio > 0.2) gCtx.fillStyle = '#ffff00';
+        else gCtx.fillStyle = '#ff0000';
+        
+        gCtx.fillRect(c.x - barWidth/2 + 1, uy + 1, (barWidth-2) * hpRatio, barHeight-2);
+        
+        gCtx.restore();
+    }
+
+    function drawHokoItem(x, y) {
+        gCtx.save();
+        gCtx.translate(x, y);
+        gCtx.fillStyle = '#ffcc00';
+        gCtx.strokeStyle = '#aa5500';
+        gCtx.lineWidth = 2;
+        gCtx.beginPath();
+        gCtx.moveTo(15, 0); gCtx.lineTo(-8, 15); gCtx.lineTo(-15, 0); gCtx.lineTo(-8, -15);
+        gCtx.closePath();
+        gCtx.fill(); gCtx.stroke();
+        gCtx.restore();
+    }
+
+    function drawGoal(x, y, color) {
+        gCtx.save();
+        gCtx.translate(x, y);
+        gCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        gCtx.strokeStyle = color;
+        gCtx.lineWidth = 4;
+        gCtx.beginPath(); gCtx.arc(0, 0, 30, 0, Math.PI*2);
+        gCtx.fill(); gCtx.stroke();
+        gCtx.fillStyle = color;
+        gCtx.beginPath(); gCtx.arc(0, 0, 10, 0, Math.PI*2); gCtx.fill();
+        gCtx.restore();
+    }
+
+    // --- UI・ループ ---
+
+    function updateUI() {
+        const inkLevel = document.getElementById('ink-level');
+        const inkTank = document.getElementById('ink-tank');
+        inkLevel.style.height = (player.ink / INK_MAX * 100) + '%';
+        if (player.ink <= 0) inkTank.classList.add('ink-empty');
+        else inkTank.classList.remove('ink-empty');
+
+        const timeEl = document.getElementById('time-left');
+        const min = Math.floor(timeRemaining / 60);
+        const sec = Math.floor(timeRemaining % 60).toString().padStart(2, '0');
+        timeEl.innerText = `${min}:${sec}`;
+        if (timeRemaining <= 10) timeEl.classList.add('time-warning');
+        else timeEl.classList.remove('time-warning');
+
+        document.getElementById('prog-p1').style.width = p1Score + '%';
+        document.getElementById('score-p1-text').innerText = p1Score;
+        document.getElementById('prog-en').style.width = enScore + '%';
+        document.getElementById('score-en-text').innerText = enScore;
+    }
+
+    function gameLoop(timestamp) {
+        if (gameState !== 'PLAYING') return;
+
+        const dt = (timestamp - lastTime) / 1000;
+        lastTime = timestamp;
+        timeRemaining -= dt;
+
+        if (timeRemaining <= 0) {
+            timeRemaining = 0;
+            finishGame('TIME_UP');
+            return;
+        }
+
+        update();
+        draw();
+        updateUI();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    function finishGame(reason) {
+        gameState = 'FINISH';
+        const title = document.getElementById('result-title');
+        const desc = document.getElementById('result-desc');
+        
+        let isWin = false;
+        if (reason === 'KNOCKOUT_WIN') {
+            isWin = true; desc.innerText = "見事ゴールまで運びきった！";
+        } else if (reason === 'KNOCKOUT_LOSE') {
+            isWin = false; desc.innerText = "ゴールまで運ばれてしまった...";
+        } else {
+            if (p1Score > enScore) { isWin = true; desc.innerText = "カウントリードで勝利！"; } 
+            else if (enScore > p1Score) { isWin = false; desc.innerText = "カウントリードで敗北..."; } 
+            else { isWin = false; desc.innerText = "引き分け（判定負け）"; }
+        }
+
+        if (isWin) { title.innerText = 'YOU WIN!!'; title.style.color = C_P1; } 
+        else { title.innerText = 'YOU LOSE...'; title.style.color = C_EN; }
+
+        document.getElementById('result-screen').style.display = 'flex';
+        updateUI();
+    }
+
+</script>
+</body>
+</html>
